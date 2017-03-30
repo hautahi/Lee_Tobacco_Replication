@@ -9,37 +9,38 @@ library(dplyr)
 
 # ACS census tract Level Data (for age and poverty): http://old.socialexplorer.com/pub/reportdata/CsvResults.aspx?reportid=R11099463
 d <- read.csv("./data/ACS2014_5yr_R11099463_SL140.csv",stringsAsFactors = FALSE,skip = 1) %>%
-  select(Geo_FIPS,Geo_NAME,Geo_TRACT,Geo_STATE,
+  select(Geo_FIPS,Geo_NAME,Geo_STATE,Geo_COUNTY,Geo_TRACT,
          kid1 = SE_T007_004,
          kid2 = SE_T007_005,
          pov18=SE_T114_002,
          pov_over=SE_T115_002) %>%
   mutate(kid=kid1+kid2,
          pov=pov18+pov_over,
-         tract=paste(as.character(Geo_STATE),as.character(Geo_TRACT),sep="")) %>%
-  group_by(tract) %>%
+         fips11=ifelse(nchar(Geo_FIPS)>10,Geo_FIPS,paste(0,Geo_FIPS,sep=""))) %>%
+  group_by(fips11) %>%
   summarise(pov=sum(pov),
             kid=sum(kid))
 
 # ACS block Level Data (for race): http://old.socialexplorer.com/pub/reportdata/CsvResults.aspx?reportid=R11210348
 df <- read.csv("./data/ACS2014_5yr_R11210348_SL150.csv",stringsAsFactors = FALSE,skip = 1) %>%
-  select(Geo_FIPS,Geo_NAME,Geo_TRACT,Geo_BLKGRP,Geo_STATE,
+  select(Geo_FIPS,Geo_NAME,Geo_STATE,Geo_COUNTY,Geo_TRACT,Geo_BLKGRP,
          pop = SE_T013_001,
          white_alone = ACS14_5yr_B02001002,
          pacific_alone = ACS14_5yr_B02001006,
          black=ACS14_5yr_B02009001,
          indian=ACS14_5yr_B02010001,
          hisp=SE_T014_010,
-         asian=ACS14_5yr_B02011001
-  ) %>% mutate(asian=asian+pacific_alone,
-               tract=paste(as.character(Geo_STATE),as.character(Geo_TRACT),sep=""))
+         asian=ACS14_5yr_B02011001) %>% 
+  mutate(asian=asian+pacific_alone,
+         fips11=ifelse(nchar(Geo_FIPS)>11,Geo_FIPS,paste(0,Geo_FIPS,sep="")),
+         fips11=substring(fips11,1,11))
 
 # -----------------
 # Construct variables
 # -----------------
 
 # Isolation Indices by Tract
-x <- df %>% group_by(tract) %>%
+x <- df %>% group_by(fips11) %>%
   mutate(sumblk = sum(black),
          index_blk = black/sumblk * black/pop,
          sumhisp = sum(hisp),
@@ -64,7 +65,7 @@ x <- df %>% group_by(tract) %>%
             index_white=10*sum(index_white,na.rm=T))
 
 # Proportions (scale by 10 as in the paper)
-x <- x %>% left_join(d,by="tract") %>%
+x <- x %>% left_join(d,by="fips11") %>%
   mutate(white=10*white/pop,
          black=10*black/pop,
          asian=10*asian/pop,
